@@ -647,6 +647,7 @@ class TypePass:private Dispatcher {
       nsname = Swig_symbol_qualified(Getattr(n, "symtab"));
       nssymname = Swig_symbol_qualified_language_scopename(Getattr(n, "symtab"));
       symtab = Swig_symbol_setscope(Getattr(n, "symtab"));
+      Setattr(n, "sym:nspace", nssymname);
       emit_children(n);
       Swig_symbol_setscope(symtab);
 

@@ -1580,12 +1580,15 @@ int Language::staticmembervariableHandler(Node *n) {
   if (!value || !Getattr(n, "hasconsttype")) {
     String *name = Getattr(n, "name");
     String *symname = Getattr(n, "sym:name");
+    Printf(stdout, "** symname=%s\n", symname);
+    Printf(stdout, "** ClassPrefix=%s\n", ClassPrefix);
     String *cname, *mrename;
 
     /* Create the variable name */
     mrename = Swig_name_member(0, ClassPrefix, symname);
     cname = NewStringf("%s::%s", classname, name);
 
+    Printf(stdout, "** mrename=%s\n", mrename);
     Setattr(n, "sym:name", mrename);
     Setattr(n, "name", cname);
 
@@ -2959,7 +2962,13 @@ int Language::namespaceDeclaration(Node *n) {
     return SWIG_OK;
   if (Getattr(n, "unnamed"))
     return SWIG_OK;
+
+  String *oldNSpace = NSpace;
+  NSpace = Getattr(n, "sym:nspace");
+
   emit_children(n);
+
+  NSpace = oldNSpace;
   return SWIG_OK;
 }
 

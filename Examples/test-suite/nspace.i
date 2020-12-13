@@ -2,7 +2,7 @@
 %module nspace
 
 // nspace feature only supported by these languages
-#if defined(SWIGJAVA) || defined(SWIGCSHARP) || defined(SWIGD) || defined(SWIGLUA) || defined(SWIGJAVASCRIPT)
+#if defined(SWIGJAVA) || defined(SWIGCSHARP) || defined(SWIGD) || defined(SWIGLUA) || defined(SWIGJAVASCRIPT) || defined(SWIGRUBY)
 
 #if defined(SWIGJAVA)
 SWIG_JAVABODY_PROXY(public, public, SWIGTYPE)
@@ -11,9 +11,14 @@ SWIG_JAVABODY_PROXY(public, public, SWIGTYPE)
 %nspace;
 %nonspace Outer::Inner2::NoNSpacePlease;
 %nonspace Outer::Inner2::NoNSpacePlease::ReallyNoNSpaceEnum;
+%nonspace Outer::Inner2::noNamespaceVar;
+%nonspace Outer::Inner2::noNamespaceVarConst;
+%nonspace ::Inner2::noNamespaceVar;
 
 %copyctor;
 %ignore Outer::Inner2::Color::Color();
+
+%rename(Yin) Yang;
 
 #define CONSTANT100 100
 
@@ -38,11 +43,17 @@ namespace Outer {
       static const Channel staticConstEnumMemberVariable = Transmission;
       void colorInstanceMethod(double d) {}
       static void colorStaticMethod(double d) {}
+
+      struct InsideColor {
+        static int staticMemberVariable;
+      }; // InsideColor
     }; // Color
     int Color::staticMemberVariable = 0;
+    int Color::InsideColor::staticMemberVariable = 7;
 
     Color namespaceFunction(Color k) { return k; }
     int namespaceVar = 0;
+    const int namespaceVarConst = 1;
   } // Inner1
 
   namespace Inner2 {
@@ -74,6 +85,8 @@ namespace Outer {
         enum ReallyNoNSpaceEnum { ReallyNoNspace1 = 1, ReallyNoNspace2 = 10 };
         static int noNspaceStaticFunc() { return 10; }
     };
+    int noNamespaceVar = 5;
+    const int noNamespaceVarConst = 6;
   } // Inner2
 
   // Derived class
@@ -107,6 +120,23 @@ struct GlobalClass {
 };
 
 void test_classes(Outer::SomeClass c, Outer::Inner2::Color cc) {}
+
+namespace individual1 {
+  int inamespaceVar = 0;
+}
+namespace individual2 {
+  const int inamespaceVarConst = 1;
+}
+namespace individual3 {
+  int inamespaceFunction(int k) { return k+1; }
+}
+namespace individual4 {
+  enum inamespaceEnum { a, b, c };
+}
+
+namespace Yang {
+  class someClazz {};
+}
 %}
 
 #else
