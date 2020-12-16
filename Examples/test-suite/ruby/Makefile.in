@@ -21,6 +21,7 @@ CPP_TEST_CASES = \
 	li_std_set \
 	li_std_stack \
 	li_std_wstring_inherit \
+	nested_scope \
 	primitive_types \
 	ruby_alias_method \
 	ruby_global_immutable_vars_cpp \
