@@ -20,6 +20,7 @@ static int director_mode = 0;
 static int director_protected_mode = 1;
 static int all_protected_mode = 0;
 static int naturalvar_mode = 0;
+static int pass_down_features_mode = 0;
 Language *Language::this_ = 0;
 
 /* Set director_protected_mode */
@@ -39,6 +40,10 @@ void Wrapper_naturalvar_mode_set(int flag) {
   naturalvar_mode = flag;
 }
 
+void Wrapper_pass_down_features_mode_set(int flag) {
+  pass_down_features_mode = flag;
+}
+
 extern "C" {
   int Swig_director_mode() {
     return director_mode;
@@ -48,6 +53,9 @@ extern "C" {
   }
   int Swig_all_protected_mode() {
     return all_protected_mode;
+  }
+  int Swig_pass_down_features_mode() {
+    return pass_down_features_mode;
   }
   void Language_replace_special_variables(String *method, String *tm, Parm *parm) {
     Language::instance()->replaceSpecialVariables(method, tm, parm);

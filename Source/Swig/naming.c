@@ -556,7 +556,8 @@ static void features_get(Hash *features, const String *tname, SwigType *decl, Sw
     merge_features(get_object(n, 0), node);
     if (ncdecl)
       merge_features(get_object(n, ncdecl), node);
-    merge_features(get_object(n, decl), node);
+    if (decl)
+      merge_features(get_object(n, decl), node);
   }
 }
 
@@ -611,6 +612,10 @@ void Swig_features_get(Hash *features, String *prefix, String *name, SwigType *d
     String *tname = NewStringEmpty();
     /* add features for 'root' template */
     String *dname = SwigType_istemplate_templateprefix(name);
+    /* features of hierarchical parent (optional) */
+    if (Swig_pass_down_features_mode() && !decl && Len(prefix)) {
+      features_get(features, prefix, 0, 0, node);
+    }
     if (dname) {
       features_get(features, dname, decl, ncdecl, node);
     }

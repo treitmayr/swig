@@ -137,6 +137,7 @@ static const char *usage4 = (const char *) "\
      -oh <headfile>  - Set name of C++ output header file for directors to <headfile>\n\
      -outcurrentdir  - Set default output dir to current dir instead of input file's path\n\
      -outdir <dir>   - Set language specific files output directory to <dir>\n\
+     -pass-down-features - Pass features down the interface hierarchy\n\
      -pcreversion    - Display PCRE version information\n\
      -small          - Compile in virtual elimination and compact mode\n\
      -swiglib        - Report location of SWIG library and exit\n\
@@ -671,6 +672,9 @@ static void getoptions(int argc, char *argv[]) {
 	} else {
 	  Swig_arg_error();
 	}
+      } else if (strcmp(argv[i], "-pass-down-features") == 0) {
+	Wrapper_pass_down_features_mode_set(1);
+	Swig_mark_arg(i);
       } else if (strcmp(argv[i], "-freeze") == 0) {
 	freeze = 1;
 	Swig_mark_arg(i);
@@ -924,6 +928,9 @@ int SWIG_main(int argc, char *argv[], const TargetLanguageModule *tlm) {
   /* Turn off directors mode */
   Wrapper_director_mode_set(0);
   Wrapper_director_protected_mode_set(1);
+
+  /* default to not passing down features (backwards compatible) */
+  Wrapper_pass_down_features_mode_set(0);
 
   // Inform the parser if the nested classes should be ignored unless explicitly told otherwise via feature:flatnested
   ignore_nested_classes = lang->nestedClassesSupport() == Language::NCS_Unknown ? 1 : 0;
