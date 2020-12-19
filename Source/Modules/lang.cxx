@@ -1580,15 +1580,12 @@ int Language::staticmembervariableHandler(Node *n) {
   if (!value || !Getattr(n, "hasconsttype")) {
     String *name = Getattr(n, "name");
     String *symname = Getattr(n, "sym:name");
-    Printf(stdout, "** symname=%s\n", symname);
-    Printf(stdout, "** ClassPrefix=%s\n", ClassPrefix);
     String *cname, *mrename;
 
     /* Create the variable name */
     mrename = Swig_name_member(0, ClassPrefix, symname);
     cname = NewStringf("%s::%s", classname, name);
 
-    Printf(stdout, "** mrename=%s\n", mrename);
     Setattr(n, "sym:name", mrename);
     Setattr(n, "name", cname);
 

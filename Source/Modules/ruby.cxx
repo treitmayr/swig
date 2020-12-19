@@ -20,9 +20,6 @@
 #define SWIG_PROTECTED_TARGET_METHODS 1
 
 class RClass {
-private:
-  String *temp;
-
 public:
   String *name;			/* class name (renamed) */
   String *cname;		/* original C class/struct name */
@@ -45,15 +42,15 @@ public:
   String *mImpl;
 
   String *type;
-  String *prefix;
-  String *init;
+  String *prefix;    /* full prefix (namespace + class prefix) */
+  String *cprefix;   /* class prefix */
+  String *init;      /* initialization code */
 
 
   int constructor_defined;
   int destructor_defined;
 
    RClass() {
-    temp = NewString("");
     name = NewString("");
     cname = NewString("");
     mname = NewString("");
@@ -61,6 +58,7 @@ public:
     mImpl = NewString("");
     type = NewString("");
     prefix = NewString("");
+    cprefix = NewString("");
     init = NewString("");
     constructor_defined = 0;
     destructor_defined = 0;
@@ -73,9 +71,9 @@ public:
     Delete(mImpl);
     Delete(mname);
     Delete(type);
+    Delete(cprefix);
     Delete(prefix);
     Delete(init);
-    Delete(temp);
   }
 
   void set_name(const_String_or_char_ptr cn, const_String_or_char_ptr valn) {
@@ -102,7 +100,10 @@ public:
 
   void set_prefix(const_String_or_char_ptr ns, const_String_or_char_ptr cp) {
     Delete(prefix);
+    Delete(cprefix);
     prefix = Swig_name_member(ns, cp, "");
+    cprefix = NewString(cp);
+    Append(cprefix, "_");
   }
 
   char *strip(const_String_or_char_ptr s) {
@@ -112,40 +113,100 @@ public:
     }
     return result;
   }
+  char *strip_cp(const_String_or_char_ptr s) {
+    char *result = Char(s);
+    if (Strncmp(s, cprefix, Len(cprefix)) == 0) {
+      result += Len(cprefix);
+    }
+    return result;
+  }
 };
 
 
 class RNSpace {
 public:
-  String *name;			/* class name (renamed) */
-  String *cname;		/* original C class/struct name */
-  String *mname;		/* Mangled name */
+  Node *node;             /* the node of this name space */
+  RNSpace *outer;         /* outer namespace (NULL for top-level namespace) */
+  String *name;		        /* namespace name (renamed) */
+  String *fqname;         /* fully-qualified Ruby namespace name (without global module) */
+  String *cname;          /* fully-qualified C++ namespace name */
+  String *symnspace;      /* value of the "sym:nspace" attribute */
+  String *modname;        /* name of the module variable */
+  bool enabled;
+  bool wrapped;
 
-   RNSpace() {
-    name = NewString("");
-    cname = NewString("");
-    mname = NewString("");
+  RNSpace(Node *n, RNSpace *outer_ns) : node(n), outer(outer_ns), wrapped(false) {
+    const static char *moduleVariablePrefix("SwigNamespace_");
+
+    Swig_require("RNSpace", node, "sym:name", NIL);
+    name = Getattr(node, "sym:name");
+    // recreate "sym:nspace" attribute (see TypePass::namespaceDeclaration())
+    symnspace = Swig_symbol_qualified_language_scopename(Getattr(n, "symtab"));
+    enabled = GetFlag(node, "feature:nspace");
+
+    /* fully-qualified C/C++ namespace name */
+    String *nodename = Getattr(node, "name");
+    assert(Len(nodename) > 0);
+    cname = NewStringEmpty();
+    if (outer) {
+      Printv(cname, outer->cname, "::", NIL);
+    }
+    Append(cname, nodename);
+
+    /* Ruby name */
+    assert(Len(name) > 0);
+    name = NewString(name);
+    fqname = NewStringEmpty();
+    if (outer) {
+      Printv(fqname, outer->fqname, "::", NIL);
+    }
+    Append(fqname, name);
+    char *nameptr = Char(name);
+    nameptr[0] = toupper(nameptr[0]);
+
+    /* mangled name */
+    modname = NewString(moduleVariablePrefix);
+    String *mangled = Swig_name_mangle(cname);
+    Append(modname, mangled);
+    Delete(mangled);
   }
   
   ~RNSpace() {
     Delete(name);
+    Delete(fqname);
     Delete(cname);
-    Delete(mname);
+    Delete(modname);
   }
 
-  void set_name(const_String_or_char_ptr cn, const_String_or_char_ptr valn) {
-    /* Original C/C++ class (or struct) name */
-    Clear(cname);
-    Append(cname, cn);
-
-    /* Mangled name */
-    Delete(mname);
-    mname = Swig_name_mangle(cname);
-
-    /* Renamed class name */
-    Clear(name);
-    Append(name, valn);
+  void setNodeNamespace(Node *n) {
+    Setattr(n, "sym:nspace", fqname);
   }
+#if 0
+  String *generateModuleDeclaration(File *f_wrappers, String *modvar) {
+    Printf(stdout, "generateModuleDeclaration: modvar='%s', name='%s', cname='%s'\n", (modvar?modvar:"-"), name, cname);
+    String *result = NULL;
+    if (!wrapped) {
+      if (outer) {
+        result = outer->generateModuleDeclaration(f_wrappers, modvar);
+      }
+      if (!result) {
+        result = NewStringEmpty();
+      }
+      Printv(f_wrappers, "static VALUE ", modname, ";\n\n", NIL);
+      Printv(result, tab4, modname, " = rb_define_module", NIL);
+      if (outer) {
+        Printv(result, "_under(", outer->modname, ", ", NIL);
+      } else if (modvar) {
+        Printv(result, "_under(", modvar, ", ", NIL);
+      } else {
+        Append(result, "(");
+      }
+      Printv(result, "\"", name, "\");\n", NIL);
+      wrapped = true;
+    }
+    return result;
+  }
+#endif
 };
 
 
@@ -176,7 +237,7 @@ Ruby Options (available with -ruby)\n\
 #define RCLASS(hash, name) (RClass*)(Getattr(hash, name) ? Data(Getattr(hash, name)) : 0)
 #define SET_RCLASS(hash, name, klass) Setattr(hash, name, NewVoid(klass, 0))
 
-#define RNSPACE(name) (RNSpace*)(Getattr(namespaces, name) ? Data(Getattr(namespaces, name)) : 0)
+#define RNSPACE(name) ((RNSpace*)Data(Getattr(namespaces, name)))
 #define SET_RNSPACE(name, nspace) Setattr(namespaces, name, NewVoid(nspace, 0))
 
 
@@ -191,6 +252,7 @@ private:
   Hash *classes;		/* key=cname val=RClass */
   RClass *klass;		/* Currently processing class */
   Hash *namespaces;
+  RNSpace *current_namespace;   /* current (but possibly disabled) namespace */
   Hash *special_methods;	/* Python style special method name table */
 
   File *f_directors;
@@ -837,6 +899,7 @@ public:
     classes(0),
     klass(0),
     namespaces(0),
+    current_namespace(0),
     special_methods(0),
     f_directors(0),
     f_directors_h(0),
@@ -1116,6 +1179,7 @@ public:
     current = NO_CPP;
     klass = 0;
     classes = NewHash();
+    current_namespace = 0;
     namespaces = NewHash();
 
     registerMagicMethods();
@@ -1390,8 +1454,7 @@ public:
 
     String *s = NewString("");
     String *temp = NewString("");
-    String *parent_mod = 0;
-    String *ns_code = 0;
+    String *parent_mod = (useGlobalModule) ? 0 : modvar;
 
 #ifdef SWIG_PROTECTED_TARGET_METHODS
     const char *rb_define_method = is_public(n) ? "rb_define_method" : "rb_define_protected_method";
@@ -1400,12 +1463,10 @@ public:
 #endif
     switch (current) {
     case MEMBER_FUNC:
-      {
-	if (multipleInheritance) {
-	  Printv(klass->init, tab4, rb_define_method, "(", klass->mImpl, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
-	} else {
-	  Printv(klass->init, tab4, rb_define_method, "(", klass->vname, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
-	}
+      if (multipleInheritance) {
+	Printv(klass->init, tab4, rb_define_method, "(", klass->mImpl, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
+      } else {
+	Printv(klass->init, tab4, rb_define_method, "(", klass->vname, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
       }
       break;
     case CONSTRUCTOR_ALLOCATE:
@@ -1438,14 +1499,17 @@ public:
       Printv(klass->init, tab4, "rb_define_singleton_method(", klass->vname, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
       break;
     case NO_CPP:
-      parent_mod = (useGlobalModule) ? 0 : modvar;
-      ns_code = handleNameSpace(n, parent_mod);
-      Printv(s, ns_code, tab4, NIL);
-      Delete(ns_code);
+      if (getNSpace() && GetFlag(n, "feature:nspace")) {
+        String *ns_code = generateNamespaceDeclaration();
+        if (ns_code) {
+          Append(s, ns_code);
+          Delete(ns_code);
+        }
+        parent_mod = current_namespace->modname;
+      }
       if (parent_mod) {
 	Printv(s, tab4, "rb_define_module_function(", parent_mod, ", \"", iname, "\", ", wname, ", -1);\n", NIL);
 	Printv(f_init, s, NIL);
-	Delete(parent_mod);
       } else {
 	Printv(s, tab4, "rb_define_global_function(\"", iname, "\", ", wname, ", -1);\n", NIL);
 	Printv(f_init, s, NIL);
@@ -2227,7 +2291,6 @@ public:
   virtual int variableWrapper(Node *n) {
     char *name = GetChar(n, "name");
     char *iname = GetChar(n, "sym:name");
-    Printf(stdout, ">> iname=%s\n", iname);
     SwigType *t = Getattr(n, "type");
     String *tm;
     String *getfname, *setfname;
@@ -2244,11 +2307,8 @@ public:
 
     /* create getter */
     int addfail = 0;
-    Printf(stdout, ">> NSpace=%s\n", (getNSpace())?getNSpace():"-");
     String *getname = Swig_name_get(getNSpace(), iname);
-    Printf(stdout, ">> getname=%s\n", getname);
     getfname = Swig_name_wrapper(getname);
-    Printf(stdout, ">> getfname=%s\n", getfname);
     Setattr(n, "wrap:name", getfname);
     Printv(getf->def, "SWIGINTERN VALUE\n", getfname, "(", NIL);
     Printf(getf->def, (use_virtual_var) ? "ID id, VALUE *data" : "VALUE self");
@@ -2316,22 +2376,14 @@ public:
     Insert(setfname, 0, (use_virtual_var) ? "SWIG_RUBY_VOID_ANYARGS_FUNC(" : "VALUEFUNC(");
     Append(setfname, ")");
 
-    String *full_name = NewString("");
+    String *temp = 0;
     String *s = NewString("");
     switch (current) {
     case STATIC_VAR:
-      Printf(stdout, "STATIC MEMBER VAR '%s'\n", iname);
       /* C++ class variable */
       /* prepare iname without class prefix */
-      if (getNSpace()) {
-        Printv(full_name, getNSpace(), "_", NIL);
-        Replaceall(full_name, NSPACE_SEPARATOR, "_");
-      }
-      Printf(stdout, "****\n");
-      Printv(full_name, iname, NIL);
-      Printf(stdout, "**** iname=%s, full_name=%s, prefix=%s\n", iname, full_name, (klass)?klass->prefix : "-");
-      iname = klass->strip(full_name);
-      Printf(stdout, "     iname=%s\n", iname);
+      temp = NewString(iname);
+      iname = klass->strip_cp(temp);
       SetChar(n, "sym:name", iname);
 
       Printv(s, tab4, "rb_define_singleton_method(", klass->vname, ", \"", iname, "\", ", getfname, ", 0);\n", NIL);
@@ -2344,12 +2396,15 @@ public:
       /* C global variable */
       /* wrapped in Ruby module attribute */
       assert(current == NO_CPP);
-      Printf(stdout, "STATIC VAR '%s' ns=%d\n", iname, GetFlag(n, "feature:nspace"));
       String *parent_mod = (useGlobalModule) ? 0 : modvar;
-      String *ns_code = handleNameSpace(n, parent_mod);
-      Printv(s, ns_code, tab4, NIL);
-      Delete(ns_code);
-
+      if (current_namespace && GetFlag(n, "feature:nspace")) {
+        String *ns_code = generateNamespaceDeclaration();
+        if (ns_code) {
+          Append(s, ns_code);
+          Delete(ns_code);
+        }
+        parent_mod = current_namespace->modname;
+      }
       if (parent_mod) {
 	Printv(s, tab4, "rb_define_singleton_method(", parent_mod, ", \"", iname, "\", ", getfname, ", 0);\n", NIL);
 	if (assignable) {
@@ -2358,21 +2413,11 @@ public:
       } else {
 	Printv(s, tab4, "rb_define_virtual_variable(\"$", iname, "\", ", getfname, ", ", setfname, ");\n", NIL);
       }
-/*
-      if (!useGlobalModule) {
-	Printv(s, tab4, "rb_define_singleton_method(", modvar, ", \"", iname, "\", ", getfname, ", 0);\n", NIL);
-	if (assignable) {
-	  Printv(s, tab4, "rb_define_singleton_method(", modvar, ", \"", iname, "=\", ", setfname, ", 1);\n", NIL);
-	}
-      } else {
-	Printv(s, tab4, "rb_define_virtual_variable(\"$", iname, "\", ", getfname, ", ", setfname, ");\n", NIL);
-      }
-*/
       Printv(f_init, s, NIL);
       Delete(s);
       break;
     }
-    Delete(full_name);
+    Delete(temp);
     Delete(getname);
     Delete(getfname);
     Delete(setfname);
@@ -2388,7 +2433,7 @@ public:
    * Validate constant name.
    * --------------------------------------------------------------------- */
 
-  char *validate_const_name(char *name, const char *reason) {
+  static char *validate_const_name(char *name, const char *reason) {
     if (!name || name[0] == '\0')
       return name;
 
@@ -2417,18 +2462,11 @@ public:
     SwigType *type = Getattr(n, "type");
     String *rawval = Getattr(n, "rawval");
     String *value = rawval ? rawval : Getattr(n, "value");
-    String *full_name = 0;
+    String *temp = 0;
 
     if (current == CLASS_CONST) {
-      full_name = NewString("");
-      if (getNSpace()) {
-        Printv(full_name, getNSpace(), "_", NIL);
-        Replaceall(full_name, NSPACE_SEPARATOR, "_");
-      }
-      Printv(full_name, iname, NIL);
-      Printf(stdout, "**** iname=%s, full_name=%s, prefix=%s\n", iname, full_name, klass->prefix);
-      iname = klass->strip(full_name);
-      Printf(stdout, "     iname=%s\n", iname);
+      temp = NewString(iname);
+      iname = klass->strip_cp(temp);
     }
     validate_const_name(iname, "constant");
     SetChar(n, "sym:name", iname);
@@ -2442,7 +2480,6 @@ public:
     String *tm = Swig_typemap_lookup("constant", n, value, 0);
     if (!tm)
       tm = Swig_typemap_lookup("constcode", n, value, 0);
-    Printf(stdout, "**** typemap='%s'\n", tm);
     if (tm) {
       Replaceall(tm, "$source", value);
       Replaceall(tm, "$target", iname);
@@ -2458,25 +2495,57 @@ public:
 	}
       } else {
         String *parent_mod = (useGlobalModule) ? 0 : modvar;
-        String *ns_code = handleNameSpace(n, parent_mod);
-        Printv(f_init, ns_code, NIL);
-        Delete(ns_code);
+        /* no namespaces for #define and %constant */
+        if (getNSpace() && !Equal(nodeType(n), "constant")) {
+          String *ns_code = generateNamespaceDeclaration();
+          if (ns_code) {
+            Printv(f_init, ns_code, NIL);
+            Delete(ns_code);
+          }
+          parent_mod = current_namespace->modname;
+        }
 	if (parent_mod) {
 	  Replaceall(tm, "$module", parent_mod);
-	  Delete(parent_mod);
 	} else {
 	  Replaceall(tm, "$module", "rb_cObject");
 	}
-	Printf(f_init, "%s\n", tm);
+  Printf(f_init, "%s\n", tm);
       }
     } else {
       Swig_warning(WARN_TYPEMAP_CONST_UNDEF, input_file, line_number, "Unsupported constant value %s = %s\n", SwigType_str(type, 0), value);
     }
+    Delete(temp);
     Swig_restore(n);
-    if (full_name) {
-      Delete(full_name);
-    }
     return SWIG_OK;
+  }
+
+  /* -----------------------------------------------------------------------------
+  * namespaceDeclaration()
+  * ----------------------------------------------------------------------------- */
+
+  virtual int namespaceDeclaration(Node *n) {
+    //Swig_require("namespaceDeclaration", n, "sym:nspace", NIL);
+    RNSpace *old_namespace = current_namespace;
+
+    if (Getattr(n, "alias")) {
+      // TODO: Should create another Ruby constant and assign it the aliased namespace module
+    } else if (!Getattr(n, "unnamed")) {
+      // recreate "sym:nspace" attribute (see TypePass::namespaceDeclaration())
+      String *sym_nspace = Swig_symbol_qualified_language_scopename(Getattr(n, "symtab"));
+      assert(sym_nspace);
+      assert(Len(sym_nspace) > 0);
+      RNSpace *rnspace = RNSPACE(sym_nspace);
+      if (!rnspace) {
+        rnspace = new RNSpace(n, old_namespace);
+        SET_RNSPACE(Char(sym_nspace), rnspace);
+      }
+      current_namespace = rnspace;
+    }
+
+    int result = Language::namespaceDeclaration(n);
+
+    current_namespace = old_namespace;
+    return result;
   }
 
   /* -----------------------------------------------------------------------------
@@ -2634,68 +2703,33 @@ public:
   }
 
   /**
-   * If enabled, process the namespaces of the current class.
+   * Generate wrapper code for namespaces.
    */
-  String *handleNameSpace(Node *n, String *&anchor) {
-    const static char *moduleVariablePrefix("SwigNamespace");
-    String *ns_code = NewString("");          // the generated code to be returned by this function
-    anchor = anchor ? NewString(anchor) : 0;  // the updated anchor for subsequent definitions
-
-    if (!GetFlag(n, "feature:nspace")) {
-      return ns_code;
+  String *generateNamespaceDeclaration(RNSpace *rnspace = NULL) {
+    if (!rnspace) {
+      rnspace = current_namespace;
     }
-
-    // traverse the hierarchy to collect all namespace nodes
-    Node *node = n;
-    List *ns_list = NewList();
-    while (node) {
-      if (Equal("namespace", Getattr(node, "nodeType"))) {
-        Push(ns_list, node);
+    String *result = NULL;
+    if (!rnspace->wrapped) {
+      if (rnspace->outer) {
+        result = generateNamespaceDeclaration(rnspace->outer);
       }
-      node = parentNode(node);
-    }
-
-    // process each namespace level starting at the most outer namespace
-    String *full_ns = NewString("");            // the cumulative C++ namespace
-    Iterator it;
-    for (it = First(ns_list); it.item; it = Next(it)) {
-      String *name = Getattr(it.item, "name");
-      Append(full_ns, name);
-      RNSpace *rnspace = RNSPACE(full_ns);
-      if (!rnspace) {
-        // namespace not processed before -> generate wrapper code and register it
-        rnspace = new RNSpace();
-        // prefer sym:name in order to take possible %rename on namespaces into account
-        String *symname = Getattr(it.item, "sym:name");
-        String *valid_name = NewString(symname ? symname : name);
-        // make sure its name is a valid Ruby constant name
-        validate_const_name(Char(valid_name), "namespace");
-        rnspace->set_name(full_ns, valid_name);
-        // remember this namespace
-        SET_RNSPACE(Char(full_ns), rnspace);
-        // generate code for creating a Ruby module for this namespace
-        Printv(f_wrappers, "static VALUE ", moduleVariablePrefix, rnspace->mname, ";\n\n", NIL);
-        Printv(ns_code, tab4, moduleVariablePrefix, rnspace->mname, NIL);
-        if (anchor) {
-          Printv(ns_code, " = rb_define_module_under(", anchor, ", \"", valid_name, "\");\n", NIL);
-        } else {
-          Printv(ns_code, " = rb_define_module(\"", valid_name, "\");\n", NIL);
-        }
-        Delete(valid_name);
+      if (!result) {
+        result = NewStringEmpty();
       }
-      // update anchor to current namespace
-      if (anchor) {
-        Clear(anchor);
+      Printv(f_wrappers, "static VALUE ", rnspace->modname, ";\n\n", NIL);
+      Printv(result, tab4, rnspace->modname, " = rb_define_module", NIL);
+      if (rnspace->outer) {
+        Printv(result, "_under(", rnspace->outer->modname, ", ", NIL);
+      } else if (!useGlobalModule) {
+        Printv(result, "_under(", modvar, ", ", NIL);
       } else {
-        anchor = NewString("");
+        Append(result, "(");
       }
-      Printv(anchor, moduleVariablePrefix, rnspace->mname, NIL);
-      Append(full_ns, "::");
+      Printv(result, "\"", rnspace->name, "\");\n", NIL);
+      rnspace->wrapped = true;
     }
-
-    Delete(full_ns);
-    Delete(ns_list);
-    return ns_code;
+    return result;
   }
 
   /* ----------------------------------------------------------------------
@@ -2724,15 +2758,19 @@ public:
 
     if (!has_outerclass) {
       String *parent_mod = (useGlobalModule) ? 0 : modvar;
-      String *ns_code = handleNameSpace(n, parent_mod);
-      Printv(klass->init, ns_code, tab4, NIL);
-      Delete(ns_code);
-
+      if (current_namespace && GetFlag(n, "feature:nspace")) {
+        String *ns_code = generateNamespaceDeclaration();
+        if (ns_code) {
+          Printv(f_init, ns_code, NIL);
+          Delete(ns_code);
+        }
+        parent_mod = current_namespace->modname;
+      }
+      Printv(klass->init, tab4, klass->vname, " = rb_define_class", NIL);
       if (parent_mod) {
-        Printv(klass->init, klass->vname, " = rb_define_class_under(", parent_mod, ", \"", klass->name, "\", $super);\n", NIL);
-        Delete(parent_mod);
+        Printv(klass->init, "_under(", parent_mod, ", \"", klass->name, "\", $super);\n", NIL);
       } else {
-        Printv(klass->init, klass->vname, " = rb_define_class(\"", klass->name, "\", $super);\n", NIL);
+        Printv(klass->init, "(\"", klass->name, "\", $super);\n", NIL);
       }
     } else {
       Node *outer = Getattr(n, "nested:outer");
@@ -2796,12 +2834,6 @@ public:
     Replaceall(klass->init, "$allocator", s);
     Replaceall(klass->init, "$initializer", "");
 
-/*    Printf(stdout, "  exceptionclass=%s\n", (GetFlag(n, "feature:exceptionclass")) ? "yes" : "no");
-    if (GetFlag(n, "feature:exceptionclass")) {
-      Replaceall(klass->init, "$super", "rb_eRuntimeError");
-    } else {
-      Replaceall(klass->init, "$super", "rb_cObject");
-    }*/
     Delete(s);
 
     Printv(f_init, klass->init, NIL);
@@ -3078,7 +3110,6 @@ public:
    * --------------------------------------------------------------------- */
 
   virtual int staticmembervariableHandler(Node *n) {
-    Printf(stdout, "===== staticmembervariableHandler =====\n");
     String* docs = docstring(n, AUTODOC_GETTER);
     Printf(f_wrappers, "%s", docs);
     Delete(docs);
@@ -3123,7 +3154,6 @@ public:
     Node *parent = Getattr(n, "parentNode");
     String *decl = Getattr(n, "decl");
     String *classname = directorClassName(parent);
-    Printf(stdout, "**** classname=%s\n", classname);
 
     /* insert self parameter */
     Parm *p;

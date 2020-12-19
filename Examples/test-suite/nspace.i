@@ -14,22 +14,25 @@ SWIG_JAVABODY_PROXY(public, public, SWIGTYPE)
 %nonspace Outer::Inner2::noNamespaceVar;
 %nonspace Outer::Inner2::noNamespaceVarConst;
 %nonspace ::Inner2::noNamespaceVar;
+%nonspace NoNSpaceOuter;
+%nonspace NoNSpaceOuter::ReallyNoNSpaceClass;
 
 %copyctor;
 %ignore Outer::Inner2::Color::Color();
 
-%rename(Yin) Yang;
+%rename(yin) Yang;
 
 #define CONSTANT100 100
 
 %inline %{
 
 namespace Outer {
+#define CONSTANT200 200
   class namespce {
   };
   namespace Inner1 {
     enum Channel { Diffuse, Specular = 0x10, Transmission1 };
-    enum { ColorEnumVal1, ColorEnumVal2 = 0x11, ColorEnumVal3 };
+    enum { ColorEnumVal1, ColorEnumVal2 = 0x11, ColorEnumVal3, colorEnumVal4 };
 
     struct Color {
       static Color* create() { return new Color(); }
@@ -43,6 +46,7 @@ namespace Outer {
       static const Channel staticConstEnumMemberVariable = Transmission;
       void colorInstanceMethod(double d) {}
       static void colorStaticMethod(double d) {}
+#define CONSTANT300 300
 
       struct InsideColor {
         static int staticMemberVariable;
@@ -134,8 +138,16 @@ namespace individual4 {
   enum inamespaceEnum { a, b, c };
 }
 
+namespace emptyNSpace {
+}
+
 namespace Yang {
   class someClazz {};
+}
+
+namespace NoNSpaceOuter {
+  class NoNSpaceClass {};
+  class ReallyNoNSpaceClass {};
 }
 %}
 

@@ -6,6 +6,11 @@
 require 'swig_assert'
 require 'nspace'
 
+# preprocessor macros (constants)
+swig_assert_equal('Nspace::CONSTANT100', '100', binding)
+swig_assert_equal('Nspace::CONSTANT200', '200', binding)
+swig_assert_equal('Nspace::CONSTANT300', '300', binding)
+
 # constructors and destructors
 color1 = Nspace::Outer::Inner1::Color.new
 color = Nspace::Outer::Inner1::Color.new(color1)
@@ -77,8 +82,12 @@ blue4.blueInstanceMethod
 
 Nspace::Individual1.inamespaceVar = 5
 swig_assert_equal('Nspace::Individual1.inamespaceVar', '5', binding)
-swig_assert_equal('Nspace::Individual2::inamespaceVarConst', '1', binding)
+swig_assert_equal('Nspace::Individual2.inamespaceVarConst', '1', binding)
+swig_assert_equal('Nspace::Individual2.respond_to?(:inamespaceVarConst=)', 'false', binding)
 swig_assert_equal('Nspace::Individual3.inamespaceFunction(22)', '23', binding)
 swig_assert_equal('Nspace::Individual4::C', '2', binding)
 
 Nspace::Yin::SomeClazz.new
+
+Nspace::NoNSpaceOuter::NoNSpaceClass.new
+Nspace::ReallyNoNSpaceClass.new
