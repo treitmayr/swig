@@ -128,21 +128,15 @@ public:
   Node *node;             /* the node of this name space */
   RNSpace *outer;         /* outer namespace (NULL for top-level namespace) */
   String *name;		        /* namespace name (renamed) */
-  String *fqname;         /* fully-qualified Ruby namespace name (without global module) */
   String *cname;          /* fully-qualified C++ namespace name */
-  String *symnspace;      /* value of the "sym:nspace" attribute */
   String *modname;        /* name of the module variable */
-  bool enabled;
   bool wrapped;
 
   RNSpace(Node *n, RNSpace *outer_ns) : node(n), outer(outer_ns), wrapped(false) {
     const static char *moduleVariablePrefix("SwigNamespace_");
 
-    Swig_require("RNSpace", node, "sym:name", NIL);
+    Swig_require("RNSpace", node, "name", "sym:name", NIL);
     name = Getattr(node, "sym:name");
-    // recreate "sym:nspace" attribute (see TypePass::namespaceDeclaration())
-    symnspace = Swig_symbol_qualified_language_scopename(Getattr(n, "symtab"));
-    enabled = GetFlag(node, "feature:nspace");
 
     /* fully-qualified C/C++ namespace name */
     String *nodename = Getattr(node, "name");
@@ -156,11 +150,6 @@ public:
     /* Ruby name */
     assert(Len(name) > 0);
     name = NewString(name);
-    fqname = NewStringEmpty();
-    if (outer) {
-      Printv(fqname, outer->fqname, "::", NIL);
-    }
-    Append(fqname, name);
     char *nameptr = Char(name);
     nameptr[0] = toupper(nameptr[0]);
 
@@ -173,40 +162,9 @@ public:
   
   ~RNSpace() {
     Delete(name);
-    Delete(fqname);
     Delete(cname);
     Delete(modname);
   }
-
-  void setNodeNamespace(Node *n) {
-    Setattr(n, "sym:nspace", fqname);
-  }
-#if 0
-  String *generateModuleDeclaration(File *f_wrappers, String *modvar) {
-    Printf(stdout, "generateModuleDeclaration: modvar='%s', name='%s', cname='%s'\n", (modvar?modvar:"-"), name, cname);
-    String *result = NULL;
-    if (!wrapped) {
-      if (outer) {
-        result = outer->generateModuleDeclaration(f_wrappers, modvar);
-      }
-      if (!result) {
-        result = NewStringEmpty();
-      }
-      Printv(f_wrappers, "static VALUE ", modname, ";\n\n", NIL);
-      Printv(result, tab4, modname, " = rb_define_module", NIL);
-      if (outer) {
-        Printv(result, "_under(", outer->modname, ", ", NIL);
-      } else if (modvar) {
-        Printv(result, "_under(", modvar, ", ", NIL);
-      } else {
-        Append(result, "(");
-      }
-      Printv(result, "\"", name, "\");\n", NIL);
-      wrapped = true;
-    }
-    return result;
-  }
-#endif
 };
 
 
@@ -1500,7 +1458,7 @@ public:
       break;
     case NO_CPP:
       if (getNSpace() && GetFlag(n, "feature:nspace")) {
-        String *ns_code = generateNamespaceDeclaration();
+        String *ns_code = generateNamespaceWrapper();
         if (ns_code) {
           Append(s, ns_code);
           Delete(ns_code);
@@ -2398,7 +2356,7 @@ public:
       assert(current == NO_CPP);
       String *parent_mod = (useGlobalModule) ? 0 : modvar;
       if (current_namespace && GetFlag(n, "feature:nspace")) {
-        String *ns_code = generateNamespaceDeclaration();
+        String *ns_code = generateNamespaceWrapper();
         if (ns_code) {
           Append(s, ns_code);
           Delete(ns_code);
@@ -2497,7 +2455,7 @@ public:
         String *parent_mod = (useGlobalModule) ? 0 : modvar;
         /* no namespaces for #define and %constant */
         if (getNSpace() && !Equal(nodeType(n), "constant")) {
-          String *ns_code = generateNamespaceDeclaration();
+          String *ns_code = generateNamespaceWrapper();
           if (ns_code) {
             Printv(f_init, ns_code, NIL);
             Delete(ns_code);
@@ -2639,8 +2597,6 @@ public:
 	  Delete(bmangle);
 	  Delete(smart);
 	  Delete(btype);
-	} else {
-	  Printf(stdout, "Cannot find base class %s\n", basenamestr);
 	}
 	base = Next(base);
 	while (base.item && GetFlag(base.item, "feature:ignore")) {
@@ -2705,14 +2661,14 @@ public:
   /**
    * Generate wrapper code for namespaces.
    */
-  String *generateNamespaceDeclaration(RNSpace *rnspace = NULL) {
+  String *generateNamespaceWrapper(RNSpace *rnspace = NULL) {
     if (!rnspace) {
       rnspace = current_namespace;
     }
     String *result = NULL;
     if (!rnspace->wrapped) {
       if (rnspace->outer) {
-        result = generateNamespaceDeclaration(rnspace->outer);
+        result = generateNamespaceWrapper(rnspace->outer);
       }
       if (!result) {
         result = NewStringEmpty();
@@ -2759,7 +2715,7 @@ public:
     if (!has_outerclass) {
       String *parent_mod = (useGlobalModule) ? 0 : modvar;
       if (current_namespace && GetFlag(n, "feature:nspace")) {
-        String *ns_code = generateNamespaceDeclaration();
+        String *ns_code = generateNamespaceWrapper();
         if (ns_code) {
           Printv(f_init, ns_code, NIL);
           Delete(ns_code);
@@ -2779,8 +2735,7 @@ public:
       RClass *outer_klass = RCLASS(classes, Char(outer_namestr));
       assert(outer_klass != 0);
       Delete(outer_namestr);
-      Printv(klass->init, "// link ", klass->name, " to outer class ", outer_klass->name, "\n", tab4, NIL);
-      Printv(klass->init, klass->vname, " = rb_define_class_under(", outer_klass->vname, ", \"", klass->name, "\", $super);\n", NIL);
+      Printv(klass->init, tab4, klass->vname, " = rb_define_class_under(", outer_klass->vname, ", \"", klass->name, "\", $super);\n", NIL);
     }
 
     if (multipleInheritance) {
