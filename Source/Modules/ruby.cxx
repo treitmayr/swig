@@ -2482,22 +2482,22 @@ public:
   * ----------------------------------------------------------------------------- */
 
   virtual int namespaceDeclaration(Node *n) {
-    //Swig_require("namespaceDeclaration", n, "sym:nspace", NIL);
     RNSpace *old_namespace = current_namespace;
 
-    if (Getattr(n, "alias")) {
-      // TODO: Should create another Ruby constant and assign it the aliased namespace module
-    } else if (!Getattr(n, "unnamed")) {
+    if (Getattr(n, "alias") || Getattr(n, "unnamed") || !Getattr(n, "symtab")) {
+      // just process by parent class
+    } else {
       // recreate "sym:nspace" attribute (see TypePass::namespaceDeclaration())
       String *sym_nspace = Swig_symbol_qualified_language_scopename(Getattr(n, "symtab"));
-      assert(sym_nspace);
-      assert(Len(sym_nspace) > 0);
-      RNSpace *rnspace = RNSPACE(sym_nspace);
-      if (!rnspace) {
-        rnspace = new RNSpace(n, old_namespace);
-        SET_RNSPACE(Char(sym_nspace), rnspace);
+      // only process valid namespaces (needed for test case 'namespace_class')
+      if (sym_nspace && Len(sym_nspace) > 0) {
+        RNSpace *rnspace = RNSPACE(sym_nspace);
+        if (!rnspace) {
+          rnspace = new RNSpace(n, old_namespace);
+          SET_RNSPACE(Char(sym_nspace), rnspace);
+        }
+        current_namespace = rnspace;
       }
-      current_namespace = rnspace;
     }
 
     int result = Language::namespaceDeclaration(n);
