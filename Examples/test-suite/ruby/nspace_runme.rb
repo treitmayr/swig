@@ -89,5 +89,3 @@ swig_assert_equal('Nspace::Individual4::C', '2', binding)
 
 Nspace::Yin::SomeClazz.new
 
-Nspace::NoNSpaceOuter::NoNSpaceClass.new
-Nspace::ReallyNoNSpaceClass.new

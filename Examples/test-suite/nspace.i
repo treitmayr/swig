@@ -14,8 +14,6 @@ SWIG_JAVABODY_PROXY(public, public, SWIGTYPE)
 %nonspace Outer::Inner2::noNamespaceVar;
 %nonspace Outer::Inner2::noNamespaceVarConst;
 %nonspace ::Inner2::noNamespaceVar;
-%nonspace NoNSpaceOuter;
-%nonspace NoNSpaceOuter::ReallyNoNSpaceClass;
 
 %copyctor;
 %ignore Outer::Inner2::Color::Color();
@@ -143,11 +141,6 @@ namespace emptyNSpace {
 
 namespace Yang {
   class someClazz {};
-}
-
-namespace NoNSpaceOuter {
-  class NoNSpaceClass {};
-  class ReallyNoNSpaceClass {};
 }
 %}
 
