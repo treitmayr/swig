@@ -28,6 +28,7 @@ CPP_TEST_CASES = \
 	ruby_keywords \
 	ruby_minherit_shared_ptr \
 	ruby_naming \
+	ruby_nspace_global_module \
 	ruby_rdata \
 	ruby_track_objects \
 	ruby_track_objects_directors \
@@ -63,6 +64,7 @@ ruby_alias_global_function.ctest: SWIGOPT += -globalmodule
 ruby_global_immutable_vars.ctest: SWIGOPT += -globalmodule
 ruby_global_immutable_vars_cpp.cpptest: SWIGOPT += -globalmodule
 ruby_naming.cpptest: SWIGOPT += -autorename
+ruby_nspace_global_module.cpptest: SWIGOPT += -globalmodule
 
 # Rules for the different types of tests
 %.cpptest:

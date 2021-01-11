@@ -1,0 +1,91 @@
+#!/usr/bin/env ruby
+#
+# This test implementation is directly derived from its Java counterpart.
+#
+
+require 'swig_assert'
+require 'ruby_nspace_global_module'
+
+# preprocessor macros (constants)
+swig_assert_equal('CONSTANT100', '100', binding)
+swig_assert_equal('CONSTANT200', '200', binding)
+swig_assert_equal('CONSTANT300', '300', binding)
+
+# constructors and destructors
+color1 = Outer::Inner1::Color.new
+color = Outer::Inner1::Color.new(color1)
+color1 = nil
+GC.start
+
+# class methods
+color.colorInstanceMethod(20.0)
+Outer::Inner1::Color.colorStaticMethod(20.0)
+created = Outer::Inner1::Color.create
+
+# class enums
+someClass = Outer::SomeClass.new
+channel = someClass.GetInner1ColorChannel
+swig_assert_equal('channel', 'Outer::Inner1::Color::Transmission', binding)
+
+# class anonymous enums
+val1 = Outer::Inner1::Color::ColorEnumVal1
+val2 = Outer::Inner1::Color::ColorEnumVal2
+swig_assert_equal('val1', '0', binding)
+swig_assert_equal('val2', '0x22', binding)
+
+# instance member variables
+color.instanceMemberVariable = 123
+swig_assert_equal('color.instanceMemberVariable', '123', binding)
+
+# static member variables
+Outer::Inner1::Color.staticMemberVariable = 789
+swig_assert_equal('Outer::Inner1::Color.staticMemberVariable', '789', binding)
+swig_assert_equal('Outer::Inner1::Color::StaticConstMemberVariable', '222', binding)
+swig_assert_equal('Outer::Inner1::Color::StaticConstEnumMemberVariable', 'Outer::Inner1::Color::Transmission', binding)
+Outer::Inner1::Color::InsideColor.staticMemberVariable = 789
+swig_assert_equal('Outer::Inner1::Color::InsideColor.staticMemberVariable', '789', binding)
+
+# same class different namespaces
+col1 = Outer::Inner1::Color.new
+col2 = Outer::Inner2::Color.create
+col2.colors(col1, col1, col2, col2, col2)
+
+# check globals in a namespace
+Outer::Inner1.namespaceFunction(color)
+Outer::Inner1.namespaceVar = 111
+swig_assert_equal('Outer::Inner1.namespaceVar', '111', binding)
+swig_assert_equal('Outer::Inner1::namespaceVarConst', '1', binding)
+
+swig_assert_equal('$noNamespaceVar', '5', binding)
+$noNamespaceVar = 112
+swig_assert_equal('$noNamespaceVar', '112', binding)
+swig_assert_equal('$noNamespaceVarConst', '6', binding)
+
+# global enums
+outerChannel1 = someClass.GetInner1Channel()
+swig_assert_equal('outerChannel1', 'Outer::Inner1::Transmission1', binding)
+outerChannel2 = someClass.GetInner2Channel()
+swig_assert_equal('outerChannel2', 'Outer::Inner2::Transmission2', binding)
+
+# turn feature off / ignoring
+ns = Outer::Namespce.new
+nons = NoNSpacePlease.new
+swig_assert_equal('NoNSpacePlease.noNspaceStaticFunc()', '10', binding)
+swig_assert_equal('NoNSpacePlease::NoNspace2', '10', binding)
+swig_assert_equal('NoNSpacePlease::ReallyNoNspace2', '10', binding)
+
+# derived class
+blue3 = Outer::Inner3::Blue.new
+blue3.blueInstanceMethod
+blue4 = Outer::Inner4::Blue.new
+blue4.blueInstanceMethod
+
+Individual1.inamespaceVar = 5
+swig_assert_equal('Individual1.inamespaceVar', '5', binding)
+swig_assert_equal('Individual2.inamespaceVarConst', '1', binding)
+swig_assert_equal('Individual2.respond_to?(:inamespaceVarConst=)', 'false', binding)
+swig_assert_equal('Individual3.inamespaceFunction(22)', '23', binding)
+swig_assert_equal('Individual4::C', '2', binding)
+
+Yin::SomeClazz.new
+

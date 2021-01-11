@@ -2258,7 +2258,17 @@ public:
     // Determine whether virtual global variables shall be used
     // which have different getter and setter signatures,
     // see https://docs.ruby-lang.org/en/2.6.0/doc/extension_rdoc.html#label-Global+Variables+Shared+Between+C+and+Ruby
-    const bool use_virtual_var = (current == NO_CPP && useGlobalModule);
+    String *parent_mod = 0;
+    bool use_virtual_var = false;
+    if (current == NO_CPP) {
+      if (current_namespace && GetFlag(n, "feature:nspace")) {
+        parent_mod = current_namespace->modname;
+      } else if (!useGlobalModule) {
+        parent_mod = modvar;
+      } else {
+        use_virtual_var = true;
+      }
+    }
 
     getf = NewWrapper();
     setf = NewWrapper();
@@ -2354,16 +2364,14 @@ public:
       /* C global variable */
       /* wrapped in Ruby module attribute */
       assert(current == NO_CPP);
-      String *parent_mod = (useGlobalModule) ? 0 : modvar;
       if (current_namespace && GetFlag(n, "feature:nspace")) {
         String *ns_code = generateNamespaceWrapper();
         if (ns_code) {
           Append(s, ns_code);
           Delete(ns_code);
         }
-        parent_mod = current_namespace->modname;
       }
-      if (parent_mod) {
+      if (!use_virtual_var) {
 	Printv(s, tab4, "rb_define_singleton_method(", parent_mod, ", \"", iname, "\", ", getfname, ", 0);\n", NIL);
 	if (assignable) {
 	  Printv(s, tab4, "rb_define_singleton_method(", parent_mod, ", \"", iname, "=\", ", setfname, ", 1);\n", NIL);
@@ -2372,9 +2380,9 @@ public:
 	Printv(s, tab4, "rb_define_virtual_variable(\"$", iname, "\", ", getfname, ", ", setfname, ");\n", NIL);
       }
       Printv(f_init, s, NIL);
-      Delete(s);
       break;
     }
+    Delete(s);
     Delete(temp);
     Delete(getname);
     Delete(getfname);
